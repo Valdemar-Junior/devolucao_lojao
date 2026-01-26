@@ -1,0 +1,5 @@
+[functions.buscar-venda]
+verify_jwt = false
+
+[functions.enviar-whatsapp]
+verify_jwt = false
