@@ -8,6 +8,13 @@ export default defineConfig(({ mode }) => ({
   server: {
     host: "::",
     port: 8080,
+    proxy: {
+      '/api-n8n': {
+        target: 'https://n8n.lojaodosmoveis.shop',
+        changeOrigin: true,
+        rewrite: (path) => path.replace(/^\/api-n8n/, ''),
+      },
+    },
   },
   plugins: [react(), mode === "development" && componentTagger()].filter(Boolean),
   resolve: {

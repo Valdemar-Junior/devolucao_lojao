@@ -59,10 +59,10 @@ const Index = () => {
     setIsLoadingSale(true);
     try {
       console.log('Buscando venda:', { numeroLancamento, filial });
-      
+
       const controller = new AbortController();
       const timeout = setTimeout(() => controller.abort(), 25000);
-      const resp = await fetch('https://n8n.joylar.shop/webhook/devolucao', {
+      const resp = await fetch('/api-n8n/webhook/devolucao', {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
@@ -81,9 +81,19 @@ const Index = () => {
         throw new Error(errText || `Erro ${resp.status}`);
       }
 
-      const data = await resp.json();
-      console.log('Resposta recebida:', data);
-      
+      const text = await resp.text();
+
+      if (!text) {
+        throw new Error("O n8n retornou uma resposta vazia.");
+      }
+
+      let data;
+      try {
+        data = JSON.parse(text);
+      } catch (e) {
+        throw new Error("A resposta do n8n não é um JSON válido.");
+      }
+
       if (Array.isArray(data) && data.length > 0) {
         const normalized = { ...data[0], vendedor: resolveVendor(data[0]) };
         setSale(normalized as Sale);
@@ -93,8 +103,8 @@ const Index = () => {
           title: "Venda encontrada",
           description: `Venda ${data[0].numero_lancamento} carregada com sucesso`,
         });
-      } else if (data && !Array.isArray(data)) {
-        // Caso o n8n retorne um objeto ao invés de array
+      } else if (data && !Array.isArray(data) && (data.numero_lancamento || data.itens_vendidos)) {
+        // Caso o n8n retorne um objeto válido ao invés de array
         const normalized = { ...data, vendedor: resolveVendor(data) };
         setSale(normalized as Sale);
         setSelectedItems([]);
@@ -104,7 +114,7 @@ const Index = () => {
           description: `Venda ${data.numero_lancamento} carregada com sucesso`,
         });
       } else {
-        throw new Error("Venda não encontrada");
+        throw new Error("A resposta não contém dados de venda válidos.");
       }
     } catch (error) {
       console.error('Erro ao buscar venda:', error);
@@ -116,8 +126,8 @@ const Index = () => {
         description: inactiveTest
           ? "Webhook não está ativo/registrado no n8n. Verifique se o fluxo está marcado como Active."
           : wrongMethod
-          ? "O webhook aceita apenas POST. Ajuste a chamada para POST."
-          : "Não foi possível carregar os dados da venda. Verifique o número de lançamento.",
+            ? "O webhook aceita apenas POST. Ajuste a chamada para POST."
+            : "Não foi possível carregar os dados da venda. Verifique o número de lançamento.",
         variant: "destructive",
       });
     } finally {
@@ -153,10 +163,10 @@ const Index = () => {
       return;
     }
 
-    const tipoSolicitacaoLabel = 
+    const tipoSolicitacaoLabel =
       tipoSolicitacao === "devolucao_com_credito" ? "Devolução com crédito" :
-      tipoSolicitacao === "devolucao_sem_credito" ? "Devolução sem crédito" :
-      "Cancelamento";
+        tipoSolicitacao === "devolucao_sem_credito" ? "Devolução sem crédito" :
+          "Cancelamento";
 
     const requestData: ReturnRequest = {
       filial,
@@ -179,9 +189,9 @@ const Index = () => {
             tipoSolicitacao === "cancelamento" || tipoDevolucao === "Total"
               ? item.quantidade_vendida
               : Math.min(
-                  Math.max(returnQuantities[item.sequencia_item] || 1, 1),
-                  item.quantidade_vendida
-                ),
+                Math.max(returnQuantities[item.sequencia_item] || 1, 1),
+                item.quantidade_vendida
+              ),
           valor_unitario: item.valor_unitario,
         })),
       motivo_devolucao: motivoDevolucao,
@@ -199,7 +209,7 @@ const Index = () => {
 
       const controller = new AbortController();
       const timeout = setTimeout(() => controller.abort(), 25000);
-      const resp = await fetch('https://n8n.joylar.shop/webhook/enviar_zap', {
+      const resp = await fetch('/api-n8n/webhook/envia-zap', {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',

@@ -11,18 +11,18 @@ Deno.serve(async (req) => {
 
   try {
     console.log('Recebendo requisição para buscar venda');
-    
+
     const { numero_lancamento, filial } = await req.json();
-    
+
     console.log('Dados recebidos:', { numero_lancamento, filial });
 
     if (!numero_lancamento || !filial) {
       console.error('Dados incompletos');
       return new Response(
         JSON.stringify({ error: 'Número de lançamento e filial são obrigatórios' }),
-        { 
-          status: 400, 
-          headers: { ...corsHeaders, 'Content-Type': 'application/json' } 
+        {
+          status: 400,
+          headers: { ...corsHeaders, 'Content-Type': 'application/json' }
         }
       );
     }
@@ -31,7 +31,7 @@ Deno.serve(async (req) => {
     console.log('Enviando requisição para n8n...');
     const controller = new AbortController();
     const timeout = setTimeout(() => controller.abort(), 25000);
-    const n8nResponse = await fetch('https://n8n.joylar.shop/webhook/devolucao', {
+    const n8nResponse = await fetch('https://n8n.lojaodosmoveis.shop/webhook/devolucao', {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
@@ -51,9 +51,9 @@ Deno.serve(async (req) => {
       console.error('Erro na resposta do n8n:', n8nResponse.statusText, errText);
       return new Response(
         JSON.stringify({ error: 'Erro ao buscar venda no n8n', details: errText || n8nResponse.statusText }),
-        { 
-          status: n8nResponse.status, 
-          headers: { ...corsHeaders, 'Content-Type': 'application/json' } 
+        {
+          status: n8nResponse.status,
+          headers: { ...corsHeaders, 'Content-Type': 'application/json' }
         }
       );
     }
@@ -63,9 +63,9 @@ Deno.serve(async (req) => {
 
     return new Response(
       JSON.stringify(data),
-      { 
-        status: 200, 
-        headers: { ...corsHeaders, 'Content-Type': 'application/json' } 
+      {
+        status: 200,
+        headers: { ...corsHeaders, 'Content-Type': 'application/json' }
       }
     );
 
@@ -74,9 +74,9 @@ Deno.serve(async (req) => {
     const errorMessage = error instanceof Error ? error.message : 'Erro desconhecido';
     return new Response(
       JSON.stringify({ error: errorMessage }),
-      { 
-        status: 500, 
-        headers: { ...corsHeaders, 'Content-Type': 'application/json' } 
+      {
+        status: 500,
+        headers: { ...corsHeaders, 'Content-Type': 'application/json' }
       }
     );
   }

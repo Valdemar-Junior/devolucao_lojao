@@ -11,9 +11,9 @@ Deno.serve(async (req) => {
 
   try {
     console.log('Recebendo requisição para enviar WhatsApp');
-    
+
     const requestData = await req.json();
-    
+
     console.log('Dados da solicitação:', {
       filial: requestData.filial,
       solicitante: requestData.solicitante,
@@ -24,7 +24,7 @@ Deno.serve(async (req) => {
 
     // Fazer a chamada para o webhook do n8n
     console.log('Enviando para n8n/Evolution...');
-    const n8nResponse = await fetch('https://n8n.joylar.shop/webhook-test/enviar_zap', {
+    const n8nResponse = await fetch('https://n8n.lojaodosmoveis.shop/webhook-test/envia-zap', {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
@@ -38,9 +38,9 @@ Deno.serve(async (req) => {
       console.error('Erro na resposta do n8n:', n8nResponse.statusText);
       return new Response(
         JSON.stringify({ error: 'Erro ao enviar mensagem para WhatsApp' }),
-        { 
-          status: n8nResponse.status, 
-          headers: { ...corsHeaders, 'Content-Type': 'application/json' } 
+        {
+          status: n8nResponse.status,
+          headers: { ...corsHeaders, 'Content-Type': 'application/json' }
         }
       );
     }
@@ -60,9 +60,9 @@ Deno.serve(async (req) => {
 
     return new Response(
       JSON.stringify(responseData),
-      { 
-        status: 200, 
-        headers: { ...corsHeaders, 'Content-Type': 'application/json' } 
+      {
+        status: 200,
+        headers: { ...corsHeaders, 'Content-Type': 'application/json' }
       }
     );
 
@@ -71,9 +71,9 @@ Deno.serve(async (req) => {
     const errorMessage = error instanceof Error ? error.message : 'Erro desconhecido';
     return new Response(
       JSON.stringify({ error: errorMessage }),
-      { 
-        status: 500, 
-        headers: { ...corsHeaders, 'Content-Type': 'application/json' } 
+      {
+        status: 500,
+        headers: { ...corsHeaders, 'Content-Type': 'application/json' }
       }
     );
   }
