@@ -67,6 +67,7 @@ export const FormBlock1 = ({
               <SelectItem value="Thiara">Thiara</SelectItem>
               <SelectItem value="Cristiano">Cristiano</SelectItem>
               <SelectItem value="Junior">Junior</SelectItem>
+              <SelectItem value="Micael">Micael</SelectItem>
             </SelectContent>
           </Select>
         </div>
@@ -81,8 +82,8 @@ export const FormBlock1 = ({
               type="button"
               onClick={() => onTipoSolicitacaoChange(tipo.value)}
               className={`px-6 py-3 rounded-lg font-medium transition-all ${tipoSolicitacao === tipo.value
-                  ? "bg-primary text-primary-foreground shadow-md"
-                  : "bg-secondary text-secondary-foreground hover:bg-secondary/80"
+                ? "bg-primary text-primary-foreground shadow-md"
+                : "bg-secondary text-secondary-foreground hover:bg-secondary/80"
                 }`}
             >
               {tipo.label}
