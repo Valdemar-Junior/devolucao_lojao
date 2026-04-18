@@ -68,6 +68,7 @@ export const FormBlock1 = ({
               <SelectItem value="Cristiano">Cristiano</SelectItem>
               <SelectItem value="Junior">Junior</SelectItem>
               <SelectItem value="Micael">Micael</SelectItem>
+              <SelectItem value="Irvine">Irvine</SelectItem>
             </SelectContent>
           </Select>
         </div>
