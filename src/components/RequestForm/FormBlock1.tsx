@@ -65,10 +65,12 @@ export const FormBlock1 = ({
               <SelectItem value="João">João</SelectItem>
               <SelectItem value="Emerson">Emerson</SelectItem>
               <SelectItem value="Thiara">Thiara</SelectItem>
+              <SelectItem value="Thais">Thais</SelectItem>
               <SelectItem value="Cristiano">Cristiano</SelectItem>
               <SelectItem value="Junior">Junior</SelectItem>
               <SelectItem value="Micael">Micael</SelectItem>
               <SelectItem value="Irvine">Irvine</SelectItem>
+              <SelectItem value="Stephanie">Stephanie</SelectItem>
             </SelectContent>
           </Select>
         </div>
