@@ -1,13 +1,64 @@
-import { useState, useEffect } from "react";
+import { useEffect, useState } from "react";
+import { Package2 } from "lucide-react";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { FormBlock1 } from "@/components/RequestForm/FormBlock1";
 import { FormBlock2 } from "@/components/RequestForm/FormBlock2";
 import { FormBlock3 } from "@/components/RequestForm/FormBlock3";
 import { FormBlock4 } from "@/components/RequestForm/FormBlock4";
-import { Sale, ReturnRequest } from "@/types/sale";
 import { useToast } from "@/hooks/use-toast";
-import { Package2 } from "lucide-react";
-import { supabase } from "@/integrations/supabase/client";
+import { ReturnRequest, Sale } from "@/types/sale";
+
+const formatCurrency = (value: number) =>
+  new Intl.NumberFormat("pt-BR", {
+    style: "currency",
+    currency: "BRL",
+  }).format(value);
+
+const formatQuantity = (value: number) =>
+  new Intl.NumberFormat("pt-BR", {
+    minimumFractionDigits: Number.isInteger(value) ? 0 : 2,
+    maximumFractionDigits: Number.isInteger(value) ? 0 : 2,
+  }).format(value);
+
+const buildRequestMessage = (requestData: ReturnRequest) => {
+  const itemsText = requestData.itens_selecionados
+    .map((item, index) => {
+      const total = item.quantidade * item.valor_unitario;
+
+      return [
+        `Item ${index + 1}`,
+        `Produto: ${item.nome_produto}`,
+        `Código: ${item.codigo_produto}`,
+        `Quantidade: ${formatQuantity(item.quantidade)}`,
+        `Valor unitário: ${formatCurrency(item.valor_unitario)}`,
+        `Total: ${formatCurrency(total)}`,
+      ].join("\n");
+    })
+    .join("\n\n");
+
+  return [
+    "📝 Solicitação de Devolução/Cancelamento – Joylar",
+    "",
+    `⏰ Data e Hora: ${requestData.data_hora_solicitacao ?? ""}`,
+    "",
+    `📍 Filial: ${requestData.filial}`,
+    `👤 Solicitante: ${requestData.solicitante}`,
+    `🔁 Tipo de Devolução: ${requestData.tipo_devolucao}`,
+    `🔄 Tipo de Solicitação: ${requestData.tipo_solicitacao}`,
+    `🧾 Nº Lançamento: ${requestData.numero_lancamento}`,
+    `🚚 Tipo de Operação: ${requestData.tipo_operacao}`,
+    `🧑‍💼 Vendedor: ${requestData.vendedor || "Não informado"}`,
+    "",
+    `👥 Cliente: ${requestData.nome_cliente}`,
+    `🆔 CPF/CNPJ: ${requestData.cpf_cnpj}`,
+    "",
+    "📦 Item(s) da Devolução:",
+    "",
+    itemsText,
+    "",
+    `✍️ Motivo: ${requestData.motivo_devolucao}`,
+  ].join("\n");
+};
 
 const Index = () => {
   const { toast } = useToast();
@@ -22,20 +73,64 @@ const Index = () => {
   const [motivoDevolucao, setMotivoDevolucao] = useState("");
   const [isLoadingSale, setIsLoadingSale] = useState(false);
   const [isSubmitting, setIsSubmitting] = useState(false);
-  const resolveVendor = (obj: any) => {
+
+  const resolveVendor = (obj: Record<string, unknown> | null | undefined) => {
     const keys = ["vendedor", "VENDEDOR", "Vendedor", "nome_vendedor", "NOME_VENDEDOR", "seller"];
-    for (const k of keys) {
-      const v = obj?.[k];
-      if (v) return String(v);
+    for (const key of keys) {
+      const value = obj?.[key];
+      if (value) {
+        return String(value);
+      }
     }
     return "";
   };
+
   useEffect(() => {
     if (tipoSolicitacao !== "cancelamento" && tipoDevolucao === "Parcial") {
       setSelectedItems([]);
       setReturnQuantities({});
     }
   }, [tipoDevolucao, tipoSolicitacao]);
+
+  const tipoSolicitacaoLabel =
+    tipoSolicitacao === "devolucao_com_credito"
+      ? "Devolução com crédito"
+      : tipoSolicitacao === "devolucao_sem_credito"
+        ? "Devolução sem crédito"
+        : "Cancelamento";
+
+  const requestPreviewData: ReturnRequest | null = sale
+    ? {
+        filial,
+        solicitante,
+        tipo_solicitacao: tipoSolicitacaoLabel,
+        tipo_devolucao: tipoSolicitacao === "cancelamento" ? "Total" : tipoDevolucao,
+        numero_lancamento: sale.numero_lancamento,
+        tipo_operacao: sale.tipo_operacao,
+        nome_cliente: sale.nome_cliente,
+        cpf_cnpj: sale.cpf_cnpj,
+        vendedor: sale.vendedor,
+        data_hora_solicitacao: new Date().toLocaleString("pt-BR", { hour12: false }),
+        itens_selecionados: sale.itens_vendidos
+          .filter((item) => selectedItems.includes(item.sequencia_item))
+          .map((item) => ({
+            sequencia_item: item.sequencia_item,
+            codigo_produto: item.codigo_produto,
+            nome_produto: item.nome_produto,
+            quantidade:
+              tipoSolicitacao === "cancelamento" || tipoDevolucao === "Total"
+                ? item.quantidade_vendida
+                : Math.min(
+                    Math.max(returnQuantities[item.sequencia_item] || 1, 1),
+                    item.quantidade_vendida
+                  ),
+            valor_unitario: item.valor_unitario,
+          })),
+        motivo_devolucao: motivoDevolucao,
+      }
+    : null;
+
+  const requestPreviewMessage = requestPreviewData ? buildRequestMessage(requestPreviewData) : "";
 
   const handleBuscarVenda = async () => {
     if (!numeroLancamento) {
@@ -58,20 +153,20 @@ const Index = () => {
 
     setIsLoadingSale(true);
     try {
-      console.log('Buscando venda:', { numeroLancamento, filial });
+      console.log("Buscando venda:", { numeroLancamento, filial });
 
       const controller = new AbortController();
       const timeout = setTimeout(() => controller.abort(), 25000);
-      const resp = await fetch('/api-n8n/webhook/devolucao', {
-        method: 'POST',
+      const resp = await fetch("/api-n8n/webhook/devolucao", {
+        method: "POST",
         headers: {
-          'Content-Type': 'application/json',
+          "Content-Type": "application/json",
         },
         body: JSON.stringify({
           numero_lancamento: numeroLancamento,
-          filial: filial,
+          filial,
         }),
-        mode: 'cors',
+        mode: "cors",
         signal: controller.signal,
       });
       clearTimeout(timeout);
@@ -90,7 +185,7 @@ const Index = () => {
       let data;
       try {
         data = JSON.parse(text);
-      } catch (e) {
+      } catch {
         throw new Error("A resposta do n8n não é um JSON válido.");
       }
 
@@ -104,7 +199,6 @@ const Index = () => {
           description: `Venda ${data[0].numero_lancamento} carregada com sucesso`,
         });
       } else if (data && !Array.isArray(data) && (data.numero_lancamento || data.itens_vendidos)) {
-        // Caso o n8n retorne um objeto válido ao invés de array
         const normalized = { ...data, vendedor: resolveVendor(data) };
         setSale(normalized as Sale);
         setSelectedItems([]);
@@ -117,10 +211,10 @@ const Index = () => {
         throw new Error("A resposta não contém dados de venda válidos.");
       }
     } catch (error) {
-      console.error('Erro ao buscar venda:', error);
-      const msg = (error as Error)?.message || '';
-      const inactiveTest = msg.toLowerCase().includes('not registered');
-      const wrongMethod = msg.toLowerCase().includes('not registered for get');
+      console.error("Erro ao buscar venda:", error);
+      const msg = (error as Error)?.message || "";
+      const inactiveTest = msg.toLowerCase().includes("not registered");
+      const wrongMethod = msg.toLowerCase().includes("not registered for get");
       toast({
         title: "Erro",
         description: inactiveTest
@@ -163,59 +257,36 @@ const Index = () => {
       return;
     }
 
-    const tipoSolicitacaoLabel =
-      tipoSolicitacao === "devolucao_com_credito" ? "Devolução com crédito" :
-        tipoSolicitacao === "devolucao_sem_credito" ? "Devolução sem crédito" :
-          "Cancelamento";
+    const requestData = requestPreviewData;
 
-    const requestData: ReturnRequest = {
-      filial,
-      solicitante,
-      tipo_solicitacao: tipoSolicitacaoLabel,
-      tipo_devolucao: tipoSolicitacao === "cancelamento" ? "Total" : tipoDevolucao,
-      numero_lancamento: sale.numero_lancamento,
-      tipo_operacao: sale.tipo_operacao,
-      nome_cliente: sale.nome_cliente,
-      cpf_cnpj: sale.cpf_cnpj,
-      vendedor: sale.vendedor,
-      data_hora_solicitacao: new Date().toLocaleString('pt-BR', { hour12: false }),
-      itens_selecionados: sale.itens_vendidos
-        .filter((item) => selectedItems.includes(item.sequencia_item))
-        .map((item) => ({
-          sequencia_item: item.sequencia_item,
-          codigo_produto: item.codigo_produto,
-          nome_produto: item.nome_produto,
-          quantidade:
-            tipoSolicitacao === "cancelamento" || tipoDevolucao === "Total"
-              ? item.quantidade_vendida
-              : Math.min(
-                Math.max(returnQuantities[item.sequencia_item] || 1, 1),
-                item.quantidade_vendida
-              ),
-          valor_unitario: item.valor_unitario,
-        })),
-      motivo_devolucao: motivoDevolucao,
-    };
+    if (!requestData) {
+      toast({
+        title: "Erro",
+        description: "Não foi possível montar a solicitação para envio.",
+        variant: "destructive",
+      });
+      return;
+    }
 
     setIsSubmitting(true);
     try {
-      console.log('Enviando solicitação:', {
+      console.log("Enviando solicitação:", {
         filial,
         solicitante,
         tipo_solicitacao: tipoSolicitacaoLabel,
         numero_lancamento: sale.numero_lancamento,
       });
-      console.log('Payload:', requestData);
+      console.log("Payload:", requestData);
 
       const controller = new AbortController();
       const timeout = setTimeout(() => controller.abort(), 25000);
-      const resp = await fetch('/api-n8n/webhook/envia-zap', {
-        method: 'POST',
+      const resp = await fetch("/api-n8n/webhook/envia-zap", {
+        method: "POST",
         headers: {
-          'Content-Type': 'application/json',
+          "Content-Type": "application/json",
         },
         body: JSON.stringify(requestData),
-        mode: 'cors',
+        mode: "cors",
         signal: controller.signal,
       });
       clearTimeout(timeout);
@@ -226,14 +297,13 @@ const Index = () => {
       }
 
       const data = await resp.json();
-      console.log('Resposta do WhatsApp:', data);
+      console.log("Resposta do WhatsApp:", data);
 
       toast({
         title: "Sucesso!",
         description: "Solicitação enviada com sucesso para o WhatsApp.",
       });
 
-      // Reset form
       setFilial("");
       setSolicitante("");
       setTipoSolicitacao("");
@@ -244,10 +314,11 @@ const Index = () => {
       setReturnQuantities({});
       setMotivoDevolucao("");
     } catch (error) {
-      console.error('Erro ao enviar solicitação:', error);
+      console.error("Erro ao enviar solicitação:", error);
       toast({
         title: "Erro",
-        description: "Não foi possível enviar a solicitação. Tente novamente.",
+        description:
+          "Não foi possível enviar a solicitação. Use o botão de copiar e publique manualmente no grupo.",
         variant: "destructive",
       });
     } finally {
@@ -255,19 +326,43 @@ const Index = () => {
     }
   };
 
-  const canSubmit = sale && selectedItems.length > 0 && motivoDevolucao.trim() !== "";
+  const handleCopyMessage = async () => {
+    if (!requestPreviewMessage) {
+      toast({
+        title: "Nada para copiar",
+        description: "Preencha a solicitação para gerar a mensagem final.",
+        variant: "destructive",
+      });
+      return;
+    }
+
+    try {
+      await navigator.clipboard.writeText(requestPreviewMessage);
+      toast({
+        title: "Mensagem copiada",
+        description: "A solicitação foi copiada e já pode ser colada manualmente no grupo.",
+      });
+    } catch (error) {
+      console.error("Erro ao copiar mensagem:", error);
+      toast({
+        title: "Erro ao copiar",
+        description: "Não foi possível copiar a mensagem automaticamente.",
+        variant: "destructive",
+      });
+    }
+  };
+
+  const canSubmit = Boolean(sale) && selectedItems.length > 0 && motivoDevolucao.trim() !== "";
 
   return (
-    <div className="min-h-screen bg-background py-8 px-4">
-      <div className="max-w-5xl mx-auto space-y-8">
-        <div className="text-center space-y-3">
+    <div className="min-h-screen bg-background px-4 py-8">
+      <div className="mx-auto max-w-5xl space-y-8">
+        <div className="space-y-3 text-center">
           <div className="flex items-center justify-center gap-3">
-            <Package2 className="w-10 h-10 text-primary" />
+            <Package2 className="h-10 w-10 text-primary" />
             <h1 className="text-4xl font-bold text-foreground">Lojão</h1>
           </div>
-          <p className="text-xl text-muted-foreground">
-            Solicitação de Devolução / Cancelamento
-          </p>
+          <p className="text-xl text-muted-foreground">Solicitação de Devolução / Cancelamento</p>
         </div>
 
         <Card>
@@ -317,8 +412,10 @@ const Index = () => {
                   motivoDevolucao={motivoDevolucao}
                   onMotivoDevolucaoChange={setMotivoDevolucao}
                   onSubmit={handleSubmit}
+                  onCopyMessage={handleCopyMessage}
                   isLoading={isSubmitting}
                   canSubmit={canSubmit}
+                  requestPreviewMessage={requestPreviewMessage}
                 />
               </CardContent>
             </Card>
