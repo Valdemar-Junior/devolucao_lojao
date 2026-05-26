@@ -20,6 +20,13 @@ const formatQuantity = (value: number) =>
     maximumFractionDigits: Number.isInteger(value) ? 0 : 2,
   }).format(value);
 
+const getTipoSolicitacaoLabel = (tipoSolicitacao: string) =>
+  tipoSolicitacao === "devolucao_com_credito"
+    ? "Devolução com crédito"
+    : tipoSolicitacao === "devolucao_sem_credito"
+      ? "Devolução sem crédito"
+      : "Cancelamento";
+
 const buildRequestMessage = (requestData: ReturnRequest) => {
   const itemsText = requestData.itens_selecionados
     .map((item, index) => {
@@ -37,7 +44,7 @@ const buildRequestMessage = (requestData: ReturnRequest) => {
     .join("\n\n");
 
   return [
-    "📝 Solicitação de Devolução/Cancelamento – Joylar",
+    "📝 Solicitação de Devolução/Cancelamento - Joylar",
     "",
     `⏰ Data e Hora: ${requestData.data_hora_solicitacao ?? ""}`,
     "",
@@ -76,12 +83,14 @@ const Index = () => {
 
   const resolveVendor = (obj: Record<string, unknown> | null | undefined) => {
     const keys = ["vendedor", "VENDEDOR", "Vendedor", "nome_vendedor", "NOME_VENDEDOR", "seller"];
+
     for (const key of keys) {
       const value = obj?.[key];
       if (value) {
         return String(value);
       }
     }
+
     return "";
   };
 
@@ -92,12 +101,7 @@ const Index = () => {
     }
   }, [tipoDevolucao, tipoSolicitacao]);
 
-  const tipoSolicitacaoLabel =
-    tipoSolicitacao === "devolucao_com_credito"
-      ? "Devolução com crédito"
-      : tipoSolicitacao === "devolucao_sem_credito"
-        ? "Devolução sem crédito"
-        : "Cancelamento";
+  const tipoSolicitacaoLabel = getTipoSolicitacaoLabel(tipoSolicitacao);
 
   const requestPreviewData: ReturnRequest | null = sale
     ? {
@@ -177,12 +181,11 @@ const Index = () => {
       }
 
       const text = await resp.text();
-
       if (!text) {
         throw new Error("O n8n retornou uma resposta vazia.");
       }
 
-      let data;
+      let data: unknown;
       try {
         data = JSON.parse(text);
       } catch {
@@ -198,14 +201,14 @@ const Index = () => {
           title: "Venda encontrada",
           description: `Venda ${data[0].numero_lancamento} carregada com sucesso`,
         });
-      } else if (data && !Array.isArray(data) && (data.numero_lancamento || data.itens_vendidos)) {
+      } else if (data && typeof data === "object" && ("numero_lancamento" in data || "itens_vendidos" in data)) {
         const normalized = { ...data, vendedor: resolveVendor(data) };
         setSale(normalized as Sale);
         setSelectedItems([]);
         setReturnQuantities({});
         toast({
           title: "Venda encontrada",
-          description: `Venda ${data.numero_lancamento} carregada com sucesso`,
+          description: `Venda ${normalized.numero_lancamento} carregada com sucesso`,
         });
       } else {
         throw new Error("A resposta não contém dados de venda válidos.");
@@ -215,6 +218,7 @@ const Index = () => {
       const msg = (error as Error)?.message || "";
       const inactiveTest = msg.toLowerCase().includes("not registered");
       const wrongMethod = msg.toLowerCase().includes("not registered for get");
+
       toast({
         title: "Erro",
         description: inactiveTest
@@ -257,7 +261,13 @@ const Index = () => {
       return;
     }
 
-    const requestData = requestPreviewData;
+    const submitTipoSolicitacaoLabel = getTipoSolicitacaoLabel(tipoSolicitacao);
+    const requestData = requestPreviewData
+      ? {
+          ...requestPreviewData,
+          tipo_solicitacao: submitTipoSolicitacaoLabel,
+        }
+      : null;
 
     if (!requestData) {
       toast({
@@ -273,7 +283,7 @@ const Index = () => {
       console.log("Enviando solicitação:", {
         filial,
         solicitante,
-        tipo_solicitacao: tipoSolicitacaoLabel,
+        tipo_solicitacao: submitTipoSolicitacaoLabel,
         numero_lancamento: sale.numero_lancamento,
       });
       console.log("Payload:", requestData);
@@ -296,7 +306,17 @@ const Index = () => {
         throw new Error(errText || `Erro ${resp.status}`);
       }
 
-      const data = await resp.json();
+      const responseText = await resp.text();
+      let data: unknown = { success: true };
+
+      if (responseText.trim()) {
+        try {
+          data = JSON.parse(responseText);
+        } catch {
+          data = responseText;
+        }
+      }
+
       console.log("Resposta do WhatsApp:", data);
 
       toast({
