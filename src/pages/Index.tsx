@@ -44,7 +44,7 @@ const buildRequestMessage = (requestData: ReturnRequest) => {
     .join("\n\n");
 
   return [
-    "📝 Solicitação de Devolução/Cancelamento - Joylar",
+    "📝 Solicitação de Devolução/Cancelamento - Lojão dos Móveis",
     "",
     `⏰ Data e Hora: ${requestData.data_hora_solicitacao ?? ""}`,
     "",
@@ -233,6 +233,44 @@ const Index = () => {
     }
   };
 
+  const copyTextToClipboard = async (text: string) => {
+    if (!text) return false;
+
+    try {
+      if (navigator.clipboard && navigator.clipboard.writeText) {
+        await navigator.clipboard.writeText(text);
+        return true;
+      }
+    } catch (error) {
+      console.warn("Clipboard API falhou, tentando fallback:", error);
+    }
+
+    try {
+      const textarea = document.createElement("textarea");
+      textarea.value = text;
+      textarea.style.position = "fixed";
+      textarea.style.top = "0";
+      textarea.style.left = "0";
+      textarea.style.width = "1px";
+      textarea.style.height = "1px";
+      textarea.style.padding = "0";
+      textarea.style.border = "none";
+      textarea.style.outline = "none";
+      textarea.style.boxShadow = "none";
+      textarea.style.background = "transparent";
+      document.body.appendChild(textarea);
+      textarea.focus();
+      textarea.select();
+
+      const successful = document.execCommand("copy");
+      document.body.removeChild(textarea);
+      return successful;
+    } catch (error) {
+      console.error("Fallback de cópia falhou:", error);
+      return false;
+    }
+  };
+
   const handleSubmit = async () => {
     if (!sale) {
       toast({
@@ -338,7 +376,7 @@ const Index = () => {
       toast({
         title: "Erro",
         description:
-          "Não foi possível enviar a solicitação. Use o botão de copiar e publique manualmente no grupo.",
+          "Não foi possível enviar a solicitação. Use a mensagem copiada manualmente no grupo.",
         variant: "destructive",
       });
     } finally {
@@ -346,7 +384,7 @@ const Index = () => {
     }
   };
 
-  const handleCopyMessage = async () => {
+  const handleCopyAndSubmit = async () => {
     if (!requestPreviewMessage) {
       toast({
         title: "Nada para copiar",
@@ -356,20 +394,22 @@ const Index = () => {
       return;
     }
 
-    try {
-      await navigator.clipboard.writeText(requestPreviewMessage);
+    const copied = await copyTextToClipboard(requestPreviewMessage);
+    if (copied) {
       toast({
         title: "Mensagem copiada",
-        description: "A solicitação foi copiada e já pode ser colada manualmente no grupo.",
+        description: "A mensagem abaixo foi copiada e será enviada em seguida.",
       });
-    } catch (error) {
-      console.error("Erro ao copiar mensagem:", error);
+    } else {
       toast({
-        title: "Erro ao copiar",
-        description: "Não foi possível copiar a mensagem automaticamente.",
-        variant: "destructive",
+        title: "Aviso",
+        description:
+          "Não foi possível copiar automaticamente. Você pode colar manualmente a mensagem abaixo.",
+        variant: "warning",
       });
     }
+
+    await handleSubmit();
   };
 
   const canSubmit = Boolean(sale) && selectedItems.length > 0 && motivoDevolucao.trim() !== "";
@@ -431,8 +471,7 @@ const Index = () => {
                 <FormBlock4
                   motivoDevolucao={motivoDevolucao}
                   onMotivoDevolucaoChange={setMotivoDevolucao}
-                  onSubmit={handleSubmit}
-                  onCopyMessage={handleCopyMessage}
+                  onSubmit={handleCopyAndSubmit}
                   isLoading={isSubmitting}
                   canSubmit={canSubmit}
                   requestPreviewMessage={requestPreviewMessage}
