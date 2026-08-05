@@ -1,6 +1,15 @@
 import { useEffect, useState } from "react";
-import { Package2 } from "lucide-react";
+import { Check, CheckCircle2, Copy, Package2 } from "lucide-react";
+import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+} from "@/components/ui/dialog";
 import { FormBlock1 } from "@/components/RequestForm/FormBlock1";
 import { FormBlock2 } from "@/components/RequestForm/FormBlock2";
 import { FormBlock3 } from "@/components/RequestForm/FormBlock3";
@@ -90,6 +99,9 @@ const Index = () => {
   const [motivosLoading, setMotivosLoading] = useState(true);
   const [isLoadingSale, setIsLoadingSale] = useState(false);
   const [isSubmitting, setIsSubmitting] = useState(false);
+  const [modalSalvoAberto, setModalSalvoAberto] = useState(false);
+  const [mensagemSalva, setMensagemSalva] = useState("");
+  const [copiadaSalva, setCopiadaSalva] = useState(false);
 
   const resolveVendor = (obj: Record<string, unknown> | null | undefined) => {
     const keys = ["vendedor", "VENDEDOR", "Vendedor", "nome_vendedor", "NOME_VENDEDOR", "seller"];
@@ -278,6 +290,34 @@ const Index = () => {
     }
   };
 
+  const copiarMensagemSalva = async () => {
+    if (!mensagemSalva) return;
+
+    try {
+      if (navigator.clipboard && navigator.clipboard.writeText) {
+        await navigator.clipboard.writeText(mensagemSalva);
+      } else {
+        const textarea = document.createElement("textarea");
+        textarea.value = mensagemSalva;
+        textarea.style.position = "fixed";
+        textarea.style.opacity = "0";
+        document.body.appendChild(textarea);
+        textarea.select();
+        document.execCommand("copy");
+        document.body.removeChild(textarea);
+      }
+      setCopiadaSalva(true);
+      setTimeout(() => setCopiadaSalva(false), 2000);
+      toast({ title: "Mensagem copiada!", description: "Cole onde precisar." });
+    } catch {
+      toast({
+        title: "Erro",
+        description: "Não foi possível copiar a mensagem.",
+        variant: "destructive",
+      });
+    }
+  };
+
   const handleSalvar = async () => {
     if (!sale) {
       toast({
@@ -357,6 +397,9 @@ const Index = () => {
         title: "Solicitação salva!",
         description: "Registro salvo no histórico — veja na tela Solicitações.",
       });
+
+      setMensagemSalva(requestPreviewMessage);
+      setModalSalvoAberto(true);
 
       setFilial("");
       setSolicitante("");
@@ -447,12 +490,56 @@ const Index = () => {
                   onSubmit={handleSalvar}
                   isLoading={isSubmitting}
                   canSubmit={canSubmit}
-                  requestPreviewMessage={requestPreviewMessage}
                 />
               </CardContent>
             </Card>
           </>
         )}
+
+      <Dialog open={modalSalvoAberto} onOpenChange={(open) => !open && setModalSalvoAberto(false)}>
+        <DialogContent className="max-h-[85vh] overflow-y-auto sm:max-w-2xl">
+          <DialogHeader>
+            <DialogTitle className="flex items-center gap-2 text-emerald-700">
+              <CheckCircle2 className="h-5 w-5" />
+              Solicitação salva no banco!
+            </DialogTitle>
+            <DialogDescription>
+              O registro foi salvo no histórico (tela Solicitações). Copie a mensagem abaixo se precisar.
+            </DialogDescription>
+          </DialogHeader>
+
+          <div className="flex items-center justify-between gap-2">
+            <p className="text-sm font-semibold">Mensagem da solicitação</p>
+            <Button
+              type="button"
+              variant="outline"
+              size="sm"
+              onClick={copiarMensagemSalva}
+              className="gap-1.5"
+            >
+              {copiadaSalva ? (
+                <Check className="h-4 w-4 text-emerald-600" />
+              ) : (
+                <Copy className="h-4 w-4" />
+              )}
+              {copiadaSalva ? "Copiado!" : "Copiar mensagem"}
+            </Button>
+          </div>
+
+          <pre className="max-h-[320px] overflow-auto whitespace-pre-wrap rounded-lg border bg-muted/30 p-4 text-sm leading-6 text-foreground">
+            {mensagemSalva || "Mensagem gerada."}
+          </pre>
+
+          <DialogFooter className="flex-col-reverse gap-2 sm:flex-row sm:items-center sm:justify-between">
+            <p className="text-xs text-muted-foreground">
+              Esta janela fica aberta até você fechá-la ou atualizar a página.
+            </p>
+            <Button variant="outline" onClick={() => setModalSalvoAberto(false)}>
+              Fechar
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
       </div>
     </div>
   );

@@ -1,5 +1,4 @@
-import { useState } from "react";
-import { Check, Copy, Save } from "lucide-react";
+import { Save } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Label } from "@/components/ui/label";
 import {
@@ -10,7 +9,6 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import { Textarea } from "@/components/ui/textarea";
-import { useToast } from "@/hooks/use-toast";
 import { Motivo } from "@/types/sale";
 
 interface FormBlock4Props {
@@ -23,7 +21,6 @@ interface FormBlock4Props {
   onSubmit: () => void;
   isLoading: boolean;
   canSubmit: boolean;
-  requestPreviewMessage: string;
 }
 
 export const FormBlock4 = ({
@@ -36,46 +33,8 @@ export const FormBlock4 = ({
   onSubmit,
   isLoading,
   canSubmit,
-  requestPreviewMessage,
 }: FormBlock4Props) => {
-  const { toast } = useToast();
-  const [copiada, setCopiada] = useState(false);
   const semMotivos = !motivosLoading && motivos.length === 0;
-
-  const copiarMensagem = async () => {
-    if (!requestPreviewMessage) {
-      toast({
-        title: "Nada para copiar",
-        description: "Preencha os dados e selecione os itens para gerar a mensagem.",
-        variant: "warning",
-      });
-      return;
-    }
-
-    try {
-      if (navigator.clipboard && navigator.clipboard.writeText) {
-        await navigator.clipboard.writeText(requestPreviewMessage);
-      } else {
-        const textarea = document.createElement("textarea");
-        textarea.value = requestPreviewMessage;
-        textarea.style.position = "fixed";
-        textarea.style.opacity = "0";
-        document.body.appendChild(textarea);
-        textarea.select();
-        document.execCommand("copy");
-        document.body.removeChild(textarea);
-      }
-      setCopiada(true);
-      setTimeout(() => setCopiada(false), 2000);
-      toast({ title: "Mensagem copiada!", description: "Cole onde precisar." });
-    } catch {
-      toast({
-        title: "Erro",
-        description: "Não foi possível copiar a mensagem.",
-        variant: "destructive",
-      });
-    }
-  };
 
   return (
     <div className="space-y-6">
@@ -121,35 +80,6 @@ export const FormBlock4 = ({
         <Save className="h-4 w-4" />
         {isLoading ? "Salvando..." : "Salvar solicitação"}
       </Button>
-
-      <div className="space-y-3 rounded-xl border border-border/70 bg-muted/30 p-4">
-        <div className="flex items-start justify-between gap-3">
-          <div>
-            <p className="text-sm font-semibold text-foreground">Prévia da mensagem</p>
-            <p className="text-sm text-muted-foreground">
-              É o que fica registrado no histórico junto com a solicitação (tela Solicitações).
-            </p>
-          </div>
-          <Button
-            type="button"
-            variant="outline"
-            size="sm"
-            onClick={copiarMensagem}
-            className="shrink-0 gap-1.5"
-          >
-            {copiada ? (
-              <Check className="h-4 w-4 text-emerald-600" />
-            ) : (
-              <Copy className="h-4 w-4" />
-            )}
-            {copiada ? "Copiado!" : "Copiar mensagem"}
-          </Button>
-        </div>
-
-        <pre className="max-h-[480px] overflow-auto whitespace-pre-wrap rounded-lg border bg-background p-4 text-sm leading-6 text-foreground">
-          {requestPreviewMessage || "Preencha os dados e selecione os itens para visualizar a mensagem final."}
-        </pre>
-      </div>
     </div>
   );
 };
