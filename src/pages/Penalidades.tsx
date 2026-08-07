@@ -80,6 +80,7 @@ const Penalidades = () => {
   const [avulsaFilial, setAvulsaFilial] = useState("");
   const [avulsaSolicitante, setAvulsaSolicitante] = useState("");
   const [avulsaVendedor, setAvulsaVendedor] = useState("");
+  const [avulsaLancamento, setAvulsaLancamento] = useState("");
   const [avulsaMotivoId, setAvulsaMotivoId] = useState("");
   const [avulsaDetalhes, setAvulsaDetalhes] = useState("");
   const [opcoesFiliais, setOpcoesFiliais] = useState<Filial[]>([]);
@@ -178,15 +179,23 @@ const Penalidades = () => {
     setAvulsaFilial("");
     setAvulsaSolicitante("");
     setAvulsaVendedor("");
+    setAvulsaLancamento("");
     setAvulsaMotivoId("");
     setAvulsaDetalhes("");
   };
 
   const registrarAvulsa = async () => {
-    if (!avulsaFilial || !avulsaSolicitante || !avulsaVendedor || !avulsaMotivoId) {
+    if (
+      !avulsaFilial ||
+      !avulsaSolicitante ||
+      !avulsaVendedor ||
+      !avulsaMotivoId ||
+      !avulsaLancamento.trim() ||
+      !Number.isFinite(Number(avulsaLancamento))
+    ) {
       toast({
         title: "Campos obrigatórios",
-        description: "Preencha filial, solicitante, vendedor e motivo.",
+        description: "Preencha filial, solicitante, vendedor, nº de lançamento e motivo.",
         variant: "destructive",
       });
       return;
@@ -203,6 +212,10 @@ const Penalidades = () => {
 
     const motivo = opcoesMotivos.find((m) => String(m.id) === avulsaMotivoId);
     const dataHora = new Date().toLocaleString("pt-BR", { hour12: false });
+    const numeroLancamento =
+      avulsaLancamento.trim() && Number.isFinite(Number(avulsaLancamento))
+        ? Number(avulsaLancamento)
+        : 0;
     const mensagem = [
       "⚠️ Penalidade Avulsa - Lojão dos Móveis",
       "",
@@ -211,6 +224,7 @@ const Penalidades = () => {
       `📍 Filial: ${avulsaFilial}`,
       `👤 Solicitante: ${avulsaSolicitante}`,
       `🧑‍💼 Vendedor: ${avulsaVendedor}`,
+      `🧾 Nº Lançamento: ${numeroLancamento > 0 ? numeroLancamento : "—"}`,
       `✍️ Motivo: ${motivo?.nome ?? ""}`,
       avulsaDetalhes.trim() ? `📝 Detalhes: ${avulsaDetalhes.trim()}` : null,
     ]
@@ -224,7 +238,7 @@ const Penalidades = () => {
         solicitante: avulsaSolicitante,
         tipo_solicitacao: "Penalidade avulsa",
         tipo_devolucao: "Avulsa",
-        numero_lancamento: 0,
+        numero_lancamento: numeroLancamento,
         tipo_operacao: null,
         nome_cliente: null,
         cpf_cnpj: null,
@@ -380,7 +394,7 @@ const Penalidades = () => {
       head: [["Data", "Vendedor", "Motivo", "Detalhes", "Lançamento", "Filial", "Ocorrência", "Multa"]],
       body: ocorrenciasDados.map((o) => [
         formatDate(o.created_at),
-        o.vendedor,
+        o.tipo_solicitacao === "Penalidade avulsa" ? `${o.vendedor} (avulsa)` : o.vendedor,
         o.motivo,
         o.detalhes ?? "",
         o.numero_lancamento > 0 ? String(o.numero_lancamento) : "—",
@@ -681,7 +695,16 @@ const Penalidades = () => {
                       <TableCell className="whitespace-nowrap">
                         {formatDate(o.created_at)}
                       </TableCell>
-                      <TableCell className="font-medium">{o.vendedor}</TableCell>
+                      <TableCell className="font-medium">
+                        <span className="flex items-center gap-1.5">
+                          {o.vendedor}
+                          {o.tipo_solicitacao === "Penalidade avulsa" && (
+                            <Badge className="shrink-0 bg-violet-100 px-1.5 text-[10px] text-violet-800 hover:bg-violet-100">
+                              Avulsa
+                            </Badge>
+                          )}
+                        </span>
+                      </TableCell>
                       <TableCell>{o.motivo}</TableCell>
                       <TableCell className="max-w-[240px]">
                         {o.detalhes ? (
@@ -870,6 +893,17 @@ const Penalidades = () => {
                     ))}
                   </SelectContent>
                 </Select>
+              </div>
+              <div className="space-y-2">
+                <Label htmlFor="avulsaLancamento">Nº Lançamento</Label>
+                <Input
+                  id="avulsaLancamento"
+                  type="number"
+                  inputMode="numeric"
+                  value={avulsaLancamento}
+                  onChange={(e) => setAvulsaLancamento(e.target.value)}
+                  placeholder="Ex: 143404"
+                />
               </div>
               <div className="space-y-2 sm:col-span-2">
                 <Label htmlFor="avulsaDetalhes">Detalhes</Label>

@@ -81,6 +81,7 @@ export interface OcorrenciaVendedor {
   filial: string;
   nome_cliente: string;
   detalhes?: string | null;
+  tipo_solicitacao?: string | null;
   n: number;
   multa: number;
 }
