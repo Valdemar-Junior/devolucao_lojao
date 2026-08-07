@@ -64,6 +64,38 @@ const formatDate = (iso: string) =>
 // Webhook do n8n responsável pelo envio do relatório por e-mail (fluxo ativo).
 const WEBHOOK_EMAIL_URL = "/api-n8n/webhook/penalidades";
 
+// Logo (LOGONEW_20.png) com fundo branco para o PDF — o jsPDF não
+// renderiza bem PNG com transparência. O resultado é cacheado.
+let logoDataUrlCache: string | null = null;
+
+const carregarLogoParaPdf = async (): Promise<string> => {
+  if (logoDataUrlCache) return logoDataUrlCache;
+  const resp = await fetch("/LOGONEW_20.png");
+  if (!resp.ok) throw new Error(`Erro ${resp.status} ao carregar o logo`);
+  const blob = await resp.blob();
+  const url = URL.createObjectURL(blob);
+  try {
+    const img = await new Promise<HTMLImageElement>((resolve, reject) => {
+      const im = new Image();
+      im.onload = () => resolve(im);
+      im.onerror = () => reject(new Error("Falha ao carregar o logo"));
+      im.src = url;
+    });
+    const canvas = document.createElement("canvas");
+    canvas.width = img.naturalWidth;
+    canvas.height = img.naturalHeight;
+    const ctx = canvas.getContext("2d");
+    if (!ctx) throw new Error("Canvas indisponível");
+    ctx.fillStyle = "#ffffff";
+    ctx.fillRect(0, 0, canvas.width, canvas.height);
+    ctx.drawImage(img, 0, 0);
+    logoDataUrlCache = canvas.toDataURL("image/png");
+    return logoDataUrlCache;
+  } finally {
+    URL.revokeObjectURL(url);
+  }
+};
+
 const Penalidades = () => {
   const { toast } = useToast();
   const [resumo, setResumo] = useState<PenalidadeVendedor[]>([]);
@@ -339,7 +371,7 @@ const Penalidades = () => {
       .sort((a, b) => b.valor_penalidade - a.valor_penalidade);
   };
 
-  const montarPDF = (
+  const montarPDF = async (
     resumoDados: PenalidadeVendedor[],
     ocorrenciasDados: OcorrenciaVendedor[],
     periodoTexto?: string,
@@ -349,15 +381,25 @@ const Penalidades = () => {
     const totalErrosD = resumoDados.reduce((soma, v) => soma + (v.total_erros ?? 0), 0);
     const totalMultasD = resumoDados.reduce((soma, v) => soma + (v.valor_penalidade ?? 0), 0);
 
+    try {
+      const logo = await carregarLogoParaPdf();
+      doc.addImage(logo, "PNG", 14, 10, 38, 16.04);
+    } catch (error) {
+      console.error("Erro ao carregar o logo no PDF:", error);
+      doc.setFont("helvetica", "bold");
+      doc.setFontSize(16);
+      doc.setTextColor(220, 38, 38);
+      doc.text("Lojão dos Móveis", 14, 18);
+      doc.setTextColor(0);
+    }
+
     doc.setFont("helvetica", "bold");
-    doc.setFontSize(16);
-    doc.text("Lojão dos Móveis", 14, 18);
-    doc.setFont("helvetica", "normal");
     doc.setFontSize(12);
-    doc.text("Relatório de Penalidades por Vendedor", 14, 26);
+    doc.text("Relatório de Penalidades por Vendedor", 14, 32);
+    doc.setFont("helvetica", "normal");
     doc.setFontSize(9);
     doc.setTextColor(120);
-    let y = 32;
+    let y = 38;
     if (periodoTexto) {
       doc.text(`Período: ${periodoTexto}`, 14, y);
       y += 6;
@@ -375,7 +417,7 @@ const Penalidades = () => {
         String(v.total_erros ?? 0),
         formatCurrency(v.valor_penalidade),
       ]),
-      headStyles: { fillColor: [21, 128, 61] as [number, number, number] },
+      headStyles: { fillColor: [220, 38, 38] as [number, number, number] },
       styles: { fontSize: 9 },
     });
 
@@ -402,7 +444,7 @@ const Penalidades = () => {
         `${o.n}ª`,
         formatCurrency(o.multa),
       ]),
-      headStyles: { fillColor: [21, 128, 61] as [number, number, number] },
+      headStyles: { fillColor: [220, 38, 38] as [number, number, number] },
       styles: { fontSize: 8 },
       columnStyles: { 3: { cellWidth: 70 } },
     });
@@ -457,7 +499,8 @@ const Penalidades = () => {
 
     if (modoDialog === "pdf") {
       try {
-        montarPDF(resumoPeriodo, lista, periodoTexto).save("relatorio-penalidades.pdf");
+        const doc = await montarPDF(resumoPeriodo, lista, periodoTexto);
+        doc.save("relatorio-penalidades.pdf");
         toast({
           title: "PDF gerado!",
           description: `Relatório do período ${periodoTexto} baixado.`,
@@ -476,9 +519,8 @@ const Penalidades = () => {
     setEnviandoEmail(true);
     try {
       // jsPDF v4: output("base64") retorna null; usamos datauristring e extraímos o base64 puro
-      const pdfBase64 = montarPDF(resumoPeriodo, lista, periodoTexto)
-        .output("datauristring")
-        .split(",")[1];
+      const pdfGerado = await montarPDF(resumoPeriodo, lista, periodoTexto);
+      const pdfBase64 = pdfGerado.output("datauristring").split(",")[1];
       const totalErrosPeriodo = resumoPeriodo.reduce((soma, v) => soma + v.total_erros, 0);
       const totalMultasPeriodo = resumoPeriodo.reduce(
         (soma, v) => soma + v.valor_penalidade,
@@ -520,8 +562,10 @@ const Penalidades = () => {
   return (
     <div className="mx-auto max-w-5xl space-y-6 px-4 py-8">
       <div className="flex flex-col items-center gap-4">
-        <div className="space-y-2 text-center">
-          <h1 className="text-3xl font-bold">Penalidades</h1>
+        <div className="animate-fade-in-up space-y-2 text-center">
+          <h1 className="text-4xl font-extrabold tracking-tight">
+            <span className="gradient-text">Penalidades</span>
+          </h1>
           <p className="text-muted-foreground">
             Ocorrências de devolução com penalidade por vendedor
           </p>

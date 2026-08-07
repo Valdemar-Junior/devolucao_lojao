@@ -327,8 +327,10 @@ const Solicitacoes = () => {
 
   return (
     <div className="mx-auto max-w-7xl space-y-6 px-4 py-8">
-      <div className="space-y-2 text-center">
-        <h1 className="text-3xl font-bold">Solicitações</h1>
+      <div className="animate-fade-in-up space-y-2 text-center">
+        <h1 className="text-4xl font-extrabold tracking-tight">
+          <span className="gradient-text">Solicitações</span>
+        </h1>
         <p className="text-muted-foreground">
           Todas as devoluções salvas no banco — sem planilha
         </p>

@@ -1,5 +1,5 @@
 import { useEffect, useState } from "react";
-import { Check, CheckCircle2, Copy, Package2 } from "lucide-react";
+import { Check, CheckCircle2, Copy } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import {
@@ -429,16 +429,19 @@ const Index = () => {
   return (
     <div className="min-h-screen bg-background px-4 py-8">
       <div className="mx-auto max-w-5xl space-y-8">
-        <div className="space-y-3 text-center">
-          <div className="flex items-center justify-center gap-3">
-            <Package2 className="h-10 w-10 text-primary" />
-            <h1 className="text-4xl font-bold text-foreground">Lojão</h1>
-          </div>
-          <p className="text-xl text-muted-foreground">Nova Solicitação de Devolução / Cancelamento</p>
+        <div className="animate-fade-in-up space-y-2 text-center">
+          <h1 className="text-4xl font-extrabold tracking-tight text-foreground">
+            Nova Solicitação de{" "}
+            <span className="gradient-text">Devolução / Cancelamento</span>
+          </h1>
+          <p className="mx-auto max-w-xl text-base text-muted-foreground">
+            Registre devoluções, cancelamentos e penalidades — tudo salvo direto no banco do
+            Lojão dos Móveis.
+          </p>
         </div>
 
-        <Card>
-          <CardHeader>
+        <Card className="shadow-soft">
+          <CardHeader className="border-b border-border/60 bg-gradient-to-r from-red-50/60 to-amber-50/40">
             <CardTitle>Dados da Solicitação</CardTitle>
           </CardHeader>
           <CardContent>

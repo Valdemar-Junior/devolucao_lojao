@@ -13,7 +13,8 @@ import Solicitacoes from "./pages/Solicitacoes";
 const queryClient = new QueryClient();
 
 const AppLayout = () => (
-  <div className="min-h-screen bg-background">
+  <div className="min-h-screen">
+    <div className="h-1 w-full bg-gradient-to-r from-red-700 via-rose-500 to-amber-400" />
     <AppHeader />
     <Outlet />
   </div>
