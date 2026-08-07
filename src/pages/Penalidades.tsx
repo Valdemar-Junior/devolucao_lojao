@@ -1,5 +1,14 @@
-import { useEffect, useState } from "react";
-import { AlertTriangle, CalendarDays, DollarSign, FileDown, Mail, TrendingUp, Users } from "lucide-react";
+import { useEffect, useRef, useState } from "react";
+import {
+  AlertTriangle,
+  CalendarDays,
+  DollarSign,
+  FileDown,
+  Gavel,
+  Mail,
+  TrendingUp,
+  Users,
+} from "lucide-react";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import {
@@ -31,8 +40,16 @@ import {
   TableHeader,
   TableRow,
 } from "@/components/ui/table";
-import { supabase } from "@/integrations/supabase/client";
-import { OcorrenciaVendedor, PenalidadeVendedor } from "@/types/sale";
+import { Textarea } from "@/components/ui/textarea";
+import { isSupabaseConfigured, supabase } from "@/integrations/supabase/client";
+import {
+  Filial,
+  Motivo,
+  OcorrenciaVendedor,
+  PenalidadeVendedor,
+  Solicitante,
+  Vendedor,
+} from "@/types/sale";
 
 const formatCurrency = (value: number) =>
   new Intl.NumberFormat("pt-BR", { style: "currency", currency: "BRL" }).format(value ?? 0);
@@ -59,43 +76,185 @@ const Penalidades = () => {
   const [modoDialog, setModoDialog] = useState<"pdf" | "email">("email");
   const [periodoDe, setPeriodoDe] = useState("");
   const [periodoAte, setPeriodoAte] = useState("");
+  const [dialogAvulsaAberto, setDialogAvulsaAberto] = useState(false);
+  const [avulsaFilial, setAvulsaFilial] = useState("");
+  const [avulsaSolicitante, setAvulsaSolicitante] = useState("");
+  const [avulsaVendedor, setAvulsaVendedor] = useState("");
+  const [avulsaMotivoId, setAvulsaMotivoId] = useState("");
+  const [avulsaDetalhes, setAvulsaDetalhes] = useState("");
+  const [opcoesFiliais, setOpcoesFiliais] = useState<Filial[]>([]);
+  const [opcoesSolicitantes, setOpcoesSolicitantes] = useState<Solicitante[]>([]);
+  const [opcoesMotivos, setOpcoesMotivos] = useState<Motivo[]>([]);
+  const [opcoesVendedores, setOpcoesVendedores] = useState<Vendedor[]>([]);
+  const [carregandoOpcoes, setCarregandoOpcoes] = useState(false);
+  const [erroOpcoes, setErroOpcoes] = useState(false);
+  const [salvandoAvulsa, setSalvandoAvulsa] = useState(false);
+  const canceladoRef = useRef(false);
+
+  const carregar = async () => {
+    if (!isSupabaseConfigured) {
+      setLoading(false);
+      setErro("Supabase não configurado. Adicione as credenciais no arquivo .env.");
+      return;
+    }
+
+    try {
+      const [resumoResp, ocorrenciasResp] = await Promise.all([
+        supabase
+          .from("vw_penalidades_vendedores")
+          .select("*")
+          .order("valor_penalidade", { ascending: false }),
+        supabase
+          .from("vw_ocorrencias_vendedor")
+          .select("*")
+          .order("created_at", { ascending: false }),
+      ]);
+
+      if (resumoResp.error) throw resumoResp.error;
+      if (ocorrenciasResp.error) throw ocorrenciasResp.error;
+
+      if (!canceladoRef.current) {
+        setResumo((resumoResp.data ?? []) as PenalidadeVendedor[]);
+        setOcorrencias((ocorrenciasResp.data ?? []) as OcorrenciaVendedor[]);
+        setErro("");
+      }
+    } catch (error) {
+      console.error("Erro ao carregar vendedores:", error);
+      if (!canceladoRef.current) setErro("Não foi possível carregar os dados de penalidades.");
+    } finally {
+      if (!canceladoRef.current) setLoading(false);
+    }
+  };
 
   useEffect(() => {
-    let cancelado = false;
-
-    const carregar = async () => {
-      try {
-        const [resumoResp, ocorrenciasResp] = await Promise.all([
-          supabase
-            .from("vw_penalidades_vendedores")
-            .select("*")
-            .order("valor_penalidade", { ascending: false }),
-          supabase
-            .from("vw_ocorrencias_vendedor")
-            .select("*")
-            .order("created_at", { ascending: false }),
-        ]);
-
-        if (resumoResp.error) throw resumoResp.error;
-        if (ocorrenciasResp.error) throw ocorrenciasResp.error;
-
-        if (!cancelado) {
-          setResumo((resumoResp.data ?? []) as PenalidadeVendedor[]);
-          setOcorrencias((ocorrenciasResp.data ?? []) as OcorrenciaVendedor[]);
-        }
-      } catch (error) {
-        console.error("Erro ao carregar vendedores:", error);
-        if (!cancelado) setErro("Não foi possível carregar os dados de penalidades.");
-      } finally {
-        if (!cancelado) setLoading(false);
-      }
-    };
-
+    canceladoRef.current = false;
     carregar();
     return () => {
-      cancelado = true;
+      canceladoRef.current = true;
     };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
+
+  const abrirDialogAvulsa = async () => {
+    setDialogAvulsaAberto(true);
+    setCarregandoOpcoes(true);
+    setErroOpcoes(false);
+    try {
+      const [filiaisResp, solicitantesResp, motivosResp, vendedoresResp] = await Promise.all([
+        supabase.from("filiais").select("id, nome").eq("ativo", true).order("nome"),
+        supabase.from("solicitantes").select("id, nome").eq("ativo", true).order("nome"),
+        supabase
+          .from("motivos")
+          .select("id, nome, causa_penalidade")
+          .eq("ativo", true)
+          .eq("causa_penalidade", true)
+          .order("nome"),
+        supabase.from("vendedores").select("id, nome").eq("ativo", true).order("nome"),
+      ]);
+      if (filiaisResp.error) throw filiaisResp.error;
+      if (solicitantesResp.error) throw solicitantesResp.error;
+      if (motivosResp.error) throw motivosResp.error;
+      if (vendedoresResp.error) throw vendedoresResp.error;
+      setOpcoesFiliais((filiaisResp.data ?? []) as Filial[]);
+      setOpcoesSolicitantes((solicitantesResp.data ?? []) as Solicitante[]);
+      setOpcoesMotivos((motivosResp.data ?? []) as Motivo[]);
+      setOpcoesVendedores((vendedoresResp.data ?? []) as Vendedor[]);
+    } catch (error) {
+      console.error("Erro ao carregar opções:", error);
+      setErroOpcoes(true);
+      toast({
+        title: "Erro",
+        description: "Não foi possível carregar as opções do formulário.",
+        variant: "destructive",
+      });
+    } finally {
+      setCarregandoOpcoes(false);
+    }
+  };
+
+  const fecharDialogAvulsa = () => {
+    if (salvandoAvulsa) return;
+    setDialogAvulsaAberto(false);
+    setAvulsaFilial("");
+    setAvulsaSolicitante("");
+    setAvulsaVendedor("");
+    setAvulsaMotivoId("");
+    setAvulsaDetalhes("");
+  };
+
+  const registrarAvulsa = async () => {
+    if (!avulsaFilial || !avulsaSolicitante || !avulsaVendedor || !avulsaMotivoId) {
+      toast({
+        title: "Campos obrigatórios",
+        description: "Preencha filial, solicitante, vendedor e motivo.",
+        variant: "destructive",
+      });
+      return;
+    }
+
+    if (!isSupabaseConfigured) {
+      toast({
+        title: "Supabase não configurado",
+        description: "Adicione as credenciais no .env para salvar a penalidade.",
+        variant: "destructive",
+      });
+      return;
+    }
+
+    const motivo = opcoesMotivos.find((m) => String(m.id) === avulsaMotivoId);
+    const dataHora = new Date().toLocaleString("pt-BR", { hour12: false });
+    const mensagem = [
+      "⚠️ Penalidade Avulsa - Lojão dos Móveis",
+      "",
+      `⏰ Data e Hora: ${dataHora}`,
+      "",
+      `📍 Filial: ${avulsaFilial}`,
+      `👤 Solicitante: ${avulsaSolicitante}`,
+      `🧑‍💼 Vendedor: ${avulsaVendedor}`,
+      `✍️ Motivo: ${motivo?.nome ?? ""}`,
+      avulsaDetalhes.trim() ? `📝 Detalhes: ${avulsaDetalhes.trim()}` : null,
+    ]
+      .filter((l): l is string => l !== null)
+      .join("\n");
+
+    setSalvandoAvulsa(true);
+    try {
+      const { error } = await supabase.from("solicitacoes_devolucao").insert({
+        filial: avulsaFilial,
+        solicitante: avulsaSolicitante,
+        tipo_solicitacao: "Penalidade avulsa",
+        tipo_devolucao: "Avulsa",
+        numero_lancamento: 0,
+        tipo_operacao: null,
+        nome_cliente: null,
+        cpf_cnpj: null,
+        vendedor: avulsaVendedor,
+        data_hora_solicitacao: dataHora,
+        motivo_id: Number(avulsaMotivoId),
+        motivo_devolucao: motivo?.nome ?? null,
+        detalhes: avulsaDetalhes.trim() || null,
+        itens: [],
+        mensagem,
+      });
+      if (error) throw error;
+
+      toast({
+        title: "Penalidade registrada!",
+        description: `Ocorrência registrada para ${avulsaVendedor} — já conta na contagem de multas.`,
+      });
+      fecharDialogAvulsa();
+      carregar();
+    } catch (error) {
+      console.error("Erro ao registrar penalidade avulsa:", error);
+      toast({
+        title: "Erro",
+        description: "Não foi possível registrar a penalidade. Tente novamente.",
+        variant: "destructive",
+      });
+    } finally {
+      setSalvandoAvulsa(false);
+    }
+  };
 
   const totalErros = resumo.reduce((soma, v) => soma + (v.total_erros ?? 0), 0);
   const totalMultas = resumo.reduce((soma, v) => soma + (v.valor_penalidade ?? 0), 0);
@@ -224,7 +383,7 @@ const Penalidades = () => {
         o.vendedor,
         o.motivo,
         o.detalhes ?? "",
-        String(o.numero_lancamento),
+        o.numero_lancamento > 0 ? String(o.numero_lancamento) : "—",
         o.filial,
         `${o.n}ª`,
         formatCurrency(o.multa),
@@ -354,21 +513,31 @@ const Penalidades = () => {
           </p>
         </div>
 
-        {!loading && !erro && (resumo.length > 0 || ocorrencias.length > 0) && (
+        {!loading && !erro && (
           <div className="flex flex-col items-center gap-1">
             <div className="flex flex-wrap items-center justify-center gap-3">
-              <Button onClick={abrirDialogPDF} className="gap-2">
-                <FileDown className="h-4 w-4" />
-                Gerar PDF
+              <Button onClick={abrirDialogAvulsa} className="gap-2">
+                <Gavel className="h-4 w-4" />
+                Registrar penalidade avulsa
               </Button>
-              <Button onClick={abrirDialogEmail} variant="outline" className="gap-2">
-                <Mail className="h-4 w-4" />
-                Enviar por e-mail
-              </Button>
+              {(resumo.length > 0 || ocorrencias.length > 0) && (
+                <>
+                  <Button onClick={abrirDialogPDF} variant="outline" className="gap-2">
+                    <FileDown className="h-4 w-4" />
+                    Gerar PDF
+                  </Button>
+                  <Button onClick={abrirDialogEmail} variant="outline" className="gap-2">
+                    <Mail className="h-4 w-4" />
+                    Enviar por e-mail
+                  </Button>
+                </>
+              )}
             </div>
-            <p className="text-xs text-muted-foreground">
-              O e-mail é disparado pelo webhook do n8n. O PDF vai anexado automaticamente.
-            </p>
+            {(resumo.length > 0 || ocorrencias.length > 0) && (
+              <p className="text-xs text-muted-foreground">
+                O e-mail é disparado pelo webhook do n8n. O PDF vai anexado automaticamente.
+              </p>
+            )}
           </div>
         )}
       </div>
@@ -386,8 +555,16 @@ const Penalidades = () => {
         <div className="rounded-lg border border-dashed p-10 text-center text-muted-foreground">
           <p className="text-lg font-medium">Nenhuma ocorrência ainda</p>
           <p className="mt-1 text-sm">
-            As penalidades aparecem aqui quando uma solicitação de devolução for enviada com um
-            motivo que causa penalidade.
+            As penalidades aparecem aqui quando uma solicitação de devolução é enviada com um
+            motivo que causa penalidade, ou quando você registra uma{" "}
+            <button
+              type="button"
+              onClick={abrirDialogAvulsa}
+              className="font-medium text-primary underline underline-offset-2 hover:text-primary/80"
+            >
+              penalidade avulsa
+            </button>
+            .
           </p>
         </div>
       )}
@@ -515,7 +692,9 @@ const Penalidades = () => {
                           <span className="text-muted-foreground">—</span>
                         )}
                       </TableCell>
-                      <TableCell className="text-right">{o.numero_lancamento}</TableCell>
+                      <TableCell className="text-right">
+                        {o.numero_lancamento > 0 ? o.numero_lancamento : "—"}
+                      </TableCell>
                       <TableCell>{o.filial}</TableCell>
                       <TableCell className="text-right">
                         <Badge variant="outline">{o.n}ª</Badge>
@@ -610,6 +789,123 @@ const Penalidades = () => {
                   Gerar PDF
                 </>
               )}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      <Dialog open={dialogAvulsaAberto} onOpenChange={(open) => !open && fecharDialogAvulsa()}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle className="flex items-center gap-2">
+              <Gavel className="h-5 w-5" />
+              Registrar penalidade avulsa
+            </DialogTitle>
+            <DialogDescription>
+              Para casos em que não há devolução, mas a penalidade precisa ser registrada. O valor
+              segue a regra automática: R$ 30 nas 3 primeiras ocorrências e R$ 50 da 4ª em diante.
+            </DialogDescription>
+          </DialogHeader>
+
+          {carregandoOpcoes ? (
+            <p className="py-6 text-center text-sm text-muted-foreground">Carregando opções...</p>
+          ) : (
+            <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
+              <div className="space-y-2">
+                <Label htmlFor="avulsaFilial">Filial</Label>
+                <Select value={avulsaFilial} onValueChange={setAvulsaFilial}>
+                  <SelectTrigger id="avulsaFilial">
+                    <SelectValue placeholder="Selecione a filial" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {opcoesFiliais.map((f) => (
+                      <SelectItem key={f.id} value={f.nome}>
+                        {f.nome}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              </div>
+              <div className="space-y-2">
+                <Label htmlFor="avulsaSolicitante">Solicitante</Label>
+                <Select value={avulsaSolicitante} onValueChange={setAvulsaSolicitante}>
+                  <SelectTrigger id="avulsaSolicitante">
+                    <SelectValue placeholder="Selecione o solicitante" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {opcoesSolicitantes.map((s) => (
+                      <SelectItem key={s.id} value={s.nome}>
+                        {s.nome}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              </div>
+              <div className="space-y-2">
+                <Label htmlFor="avulsaVendedor">Vendedor</Label>
+                <Select value={avulsaVendedor} onValueChange={setAvulsaVendedor}>
+                  <SelectTrigger id="avulsaVendedor">
+                    <SelectValue placeholder="Selecione o vendedor" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {opcoesVendedores.map((v) => (
+                      <SelectItem key={v.id} value={v.nome}>
+                        {v.nome}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              </div>
+              <div className="space-y-2">
+                <Label htmlFor="avulsaMotivo">Motivo</Label>
+                <Select value={avulsaMotivoId} onValueChange={setAvulsaMotivoId}>
+                  <SelectTrigger id="avulsaMotivo">
+                    <SelectValue placeholder="Selecione o motivo" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {opcoesMotivos.map((m) => (
+                      <SelectItem key={m.id} value={String(m.id)}>
+                        {m.nome}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              </div>
+              <div className="space-y-2 sm:col-span-2">
+                <Label htmlFor="avulsaDetalhes">Detalhes</Label>
+                <Textarea
+                  id="avulsaDetalhes"
+                  value={avulsaDetalhes}
+                  onChange={(e) => setAvulsaDetalhes(e.target.value)}
+                  placeholder="Descreva o que aconteceu (opcional)"
+                  rows={3}
+                />
+              </div>
+            </div>
+          )}
+
+          {!carregandoOpcoes && !erroOpcoes && opcoesMotivos.length === 0 && (
+            <p className="rounded-md border border-amber-200 bg-amber-50 p-3 text-xs text-amber-700">
+              Nenhum motivo ativo com "Causa penalidade" encontrado. Cadastre um em{" "}
+              <strong>Configurações → Motivos</strong> antes de registrar.
+            </p>
+          )}
+
+          {!carregandoOpcoes && !erroOpcoes && opcoesVendedores.length === 0 && (
+            <p className="rounded-md border border-amber-200 bg-amber-50 p-3 text-xs text-amber-700">
+              Nenhum vendedor cadastrado. Adicione os vendedores em{" "}
+              <strong>Configurações → Vendedores</strong> (com o mesmo nome do sistema) antes de
+              registrar.
+            </p>
+          )}
+
+          <DialogFooter>
+            <Button variant="ghost" onClick={fecharDialogAvulsa} disabled={salvandoAvulsa}>
+              Cancelar
+            </Button>
+            <Button onClick={registrarAvulsa} disabled={salvandoAvulsa} className="gap-2">
+              <Gavel className="h-4 w-4" />
+              {salvandoAvulsa ? "Salvando..." : "Registrar penalidade"}
             </Button>
           </DialogFooter>
         </DialogContent>

@@ -7,7 +7,7 @@ import { Switch } from "@/components/ui/switch";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { useToast } from "@/hooks/use-toast";
 import { isSupabaseConfigured, supabase } from "@/integrations/supabase/client";
-import { Filial, Motivo, Solicitante } from "@/types/sale";
+import { Filial, Motivo, Solicitante, Vendedor } from "@/types/sale";
 
 function useRegistros<T extends { id: number }>(tabela: string, nomeExibicao: string) {
   const { toast } = useToast();
@@ -334,6 +334,50 @@ const SolicitantesTab = () => {
   );
 };
 
+const VendedoresTab = () => {
+  const { items, loading, salvando, adicionar, toggle, editar } = useRegistros<Vendedor>(
+    "vendedores",
+    "os vendedores",
+  );
+
+  return (
+    <Card>
+      <CardHeader>
+        <CardTitle>Vendedores</CardTitle>
+      </CardHeader>
+      <CardContent className="space-y-4">
+        <FormAdicionar
+          placeholder="Ex: Carlos Souza"
+          salvando={salvando}
+          aoAdicionar={(nome) => adicionar(nome)}
+        />
+        <p className="text-sm text-muted-foreground">
+          Use exatamente o mesmo nome que vem do sistema nas vendas. É essa lista que garante que o
+          relatório de penalidades não duplique o mesmo vendedor.
+        </p>
+        {loading ? (
+          <p className="py-4 text-sm text-muted-foreground">Carregando...</p>
+        ) : (
+          <div className="divide-y rounded-lg border">
+            {items.map((v) => (
+              <div key={v.id} className="flex flex-wrap items-center justify-between gap-3 p-3">
+                <LinhaEditavel nome={v.nome} aoRenomear={(novoNome) => editar(v, novoNome)} />
+                <label className="flex items-center gap-2 text-sm text-muted-foreground">
+                  <Switch checked={v.ativo ?? true} onCheckedChange={() => toggle(v, "ativo")} />
+                  Ativo
+                </label>
+              </div>
+            ))}
+            {items.length === 0 && (
+              <p className="p-4 text-sm text-muted-foreground">Nenhum vendedor cadastrado.</p>
+            )}
+          </div>
+        )}
+      </CardContent>
+    </Card>
+  );
+};
+
 const FiliaisTab = () => {
   const { items, loading, salvando, adicionar, toggle, editar } = useRegistros<Filial>(
     "filiais",
@@ -383,15 +427,16 @@ const Configuracoes = () => {
       <div className="space-y-2 text-center">
         <h1 className="text-3xl font-bold">Configurações</h1>
         <p className="text-muted-foreground">
-          Cadastre motivos, solicitantes e filiais usados nos formulários
+          Cadastre motivos, solicitantes, filiais e vendedores usados nos formulários
         </p>
       </div>
 
       <Tabs defaultValue="motivos">
-        <TabsList className="grid w-full grid-cols-3">
+        <TabsList className="grid w-full grid-cols-2 sm:grid-cols-4">
           <TabsTrigger value="motivos">Motivos</TabsTrigger>
           <TabsTrigger value="solicitantes">Solicitantes</TabsTrigger>
           <TabsTrigger value="filiais">Filiais</TabsTrigger>
+          <TabsTrigger value="vendedores">Vendedores</TabsTrigger>
         </TabsList>
         <TabsContent value="motivos">
           <MotivosTab />
@@ -401,6 +446,9 @@ const Configuracoes = () => {
         </TabsContent>
         <TabsContent value="filiais">
           <FiliaisTab />
+        </TabsContent>
+        <TabsContent value="vendedores">
+          <VendedoresTab />
         </TabsContent>
       </Tabs>
     </div>

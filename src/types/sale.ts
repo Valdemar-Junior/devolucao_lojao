@@ -58,6 +58,12 @@ export interface Filial {
   ativo?: boolean;
 }
 
+export interface Vendedor {
+  id: number;
+  nome: string;
+  ativo?: boolean;
+}
+
 export interface PenalidadeVendedor {
   vendedor: string;
   total_erros: number;

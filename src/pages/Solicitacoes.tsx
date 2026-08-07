@@ -71,7 +71,12 @@ const OPCOES_DATA: { id: FiltroData; label: string }[] = [
   { id: "personalizado", label: "Personalizado" },
 ];
 
-const TIPOS_SOLICITACAO = ["Devolução com crédito", "Devolução sem crédito", "Cancelamento"];
+const TIPOS_SOLICITACAO = [
+  "Devolução com crédito",
+  "Devolução sem crédito",
+  "Cancelamento",
+  "Penalidade avulsa",
+];
 
 const tipoBadge = (tipo: string) => {
   switch (tipo) {
@@ -85,6 +90,10 @@ const tipoBadge = (tipo: string) => {
       );
     case "Cancelamento":
       return <Badge className="bg-red-100 text-red-800 hover:bg-red-100">Cancelamento</Badge>;
+    case "Penalidade avulsa":
+      return (
+        <Badge className="bg-violet-100 text-violet-800 hover:bg-violet-100">Avulsa</Badge>
+      );
     default:
       return <Badge variant="outline">{tipo}</Badge>;
   }
@@ -584,7 +593,7 @@ const Solicitacoes = () => {
                           <TableCell>{s.solicitante}</TableCell>
                           <TableCell>{tipoBadge(s.tipo_solicitacao)}</TableCell>
                           <TableCell className="text-right font-medium">
-                            {s.numero_lancamento}
+                            {s.numero_lancamento > 0 ? s.numero_lancamento : "—"}
                           </TableCell>
                           <TableCell className="font-medium">{s.vendedor ?? "—"}</TableCell>
                           <TableCell className="max-w-[160px] truncate" title={s.nome_cliente ?? ""}>
@@ -641,9 +650,11 @@ const Solicitacoes = () => {
               <DialogHeader>
                 <DialogTitle className="flex flex-wrap items-center gap-2">
                   Solicitação #{detalhe.id}
-                  <span className="font-normal text-muted-foreground">
-                    · Lançamento {detalhe.numero_lancamento}
-                  </span>
+                  {detalhe.numero_lancamento > 0 && (
+                    <span className="font-normal text-muted-foreground">
+                      · Lançamento {detalhe.numero_lancamento}
+                    </span>
+                  )}
                 </DialogTitle>
                 <DialogDescription>
                   Criada em {formatDateTime(detalhe.created_at)} · {detalhe.filial}
