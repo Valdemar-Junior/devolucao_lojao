@@ -61,6 +61,46 @@ const formatDate = (iso: string) =>
     year: "numeric",
   });
 
+const toDateInput = (d: Date) => {
+  const ano = d.getFullYear();
+  const mes = String(d.getMonth() + 1).padStart(2, "0");
+  const dia = String(d.getDate()).padStart(2, "0");
+  return `${ano}-${mes}-${dia}`;
+};
+
+type PeriodoPreset = "hoje" | "7dias" | "mes_atual" | "mes_anterior" | "personalizado";
+
+const PERIODO_OPCOES: { value: PeriodoPreset; label: string }[] = [
+  { value: "hoje", label: "Hoje" },
+  { value: "7dias", label: "Últimos 7 dias" },
+  { value: "mes_atual", label: "Mês atual" },
+  { value: "mes_anterior", label: "Mês anterior" },
+  { value: "personalizado", label: "Personalizado" },
+];
+
+// Intervalo (de / até) de cada período pré-definido, calculado a partir de hoje.
+const intervaloDoPreset = (preset: PeriodoPreset): { de: string; ate: string } => {
+  const hoje = new Date();
+  switch (preset) {
+    case "hoje":
+      return { de: toDateInput(hoje), ate: toDateInput(hoje) };
+    case "7dias": {
+      const inicio = new Date(hoje.getFullYear(), hoje.getMonth(), hoje.getDate() - 6);
+      return { de: toDateInput(inicio), ate: toDateInput(hoje) };
+    }
+    case "mes_anterior": {
+      const primeiro = new Date(hoje.getFullYear(), hoje.getMonth() - 1, 1);
+      const ultimo = new Date(hoje.getFullYear(), hoje.getMonth(), 0);
+      return { de: toDateInput(primeiro), ate: toDateInput(ultimo) };
+    }
+    case "mes_atual":
+    default: {
+      const primeiro = new Date(hoje.getFullYear(), hoje.getMonth(), 1);
+      return { de: toDateInput(primeiro), ate: toDateInput(hoje) };
+    }
+  }
+};
+
 // Webhook do n8n responsável pelo envio do relatório por e-mail (fluxo ativo).
 const WEBHOOK_EMAIL_URL = "/api-n8n/webhook/penalidades";
 
@@ -108,6 +148,9 @@ const Penalidades = () => {
   const [modoDialog, setModoDialog] = useState<"pdf" | "email">("email");
   const [periodoDe, setPeriodoDe] = useState("");
   const [periodoAte, setPeriodoAte] = useState("");
+  const [preset, setPreset] = useState<PeriodoPreset>("mes_atual");
+  const [customDe, setCustomDe] = useState(() => intervaloDoPreset("mes_atual").de);
+  const [customAte, setCustomAte] = useState(() => intervaloDoPreset("mes_atual").ate);
   const [dialogAvulsaAberto, setDialogAvulsaAberto] = useState(false);
   const [avulsaFilial, setAvulsaFilial] = useState("");
   const [avulsaSolicitante, setAvulsaSolicitante] = useState("");
@@ -302,34 +345,20 @@ const Penalidades = () => {
     }
   };
 
-  const totalErros = resumo.reduce((soma, v) => soma + (v.total_erros ?? 0), 0);
-  const totalMultas = resumo.reduce((soma, v) => soma + (v.valor_penalidade ?? 0), 0);
-  const vendedoresLista = [...new Set(ocorrencias.map((o) => o.vendedor))].sort((a, b) =>
-    a.localeCompare(b, "pt-BR"),
-  );
-  const ocorrenciasFiltradas =
-    filtro === "todos" ? ocorrencias : ocorrencias.filter((o) => o.vendedor === filtro);
+  // Intervalo em vigor na tela: presets são recalculados a cada render;
+  // "personalizado" usa as datas informadas pelo usuário.
+  const intervalo =
+    preset === "personalizado" ? { de: customDe, ate: customAte } : intervaloDoPreset(preset);
+  const intervaloValido =
+    Boolean(intervalo.de) && Boolean(intervalo.ate) && intervalo.de <= intervalo.ate;
 
-  const hoje = new Date();
-
-  const toDateInput = (d: Date) => {
-    const ano = d.getFullYear();
-    const mes = String(d.getMonth() + 1).padStart(2, "0");
-    const dia = String(d.getDate()).padStart(2, "0");
-    return `${ano}-${mes}-${dia}`;
-  };
-
-  const setarMesAnterior = () => {
-    const primeiro = new Date(hoje.getFullYear(), hoje.getMonth() - 1, 1);
-    const ultimo = new Date(hoje.getFullYear(), hoje.getMonth(), 0);
-    setPeriodoDe(toDateInput(primeiro));
-    setPeriodoAte(toDateInput(ultimo));
-  };
-
-  const setarMesAtual = () => {
-    const primeiro = new Date(hoje.getFullYear(), hoje.getMonth(), 1);
-    setPeriodoDe(toDateInput(primeiro));
-    setPeriodoAte(toDateInput(hoje));
+  const trocarPreset = (valor: PeriodoPreset) => {
+    if (valor !== "personalizado") {
+      const { de, ate } = intervaloDoPreset(valor);
+      setCustomDe(de);
+      setCustomAte(ate);
+    }
+    setPreset(valor);
   };
 
   const formatPeriodo = (de: string, ate: string) => {
@@ -370,6 +399,22 @@ const Penalidades = () => {
       }))
       .sort((a, b) => b.valor_penalidade - a.valor_penalidade);
   };
+
+  // Dados exibidos na tela, já recortados pelo período selecionado.
+  const ocorrenciasPeriodo = intervaloValido
+    ? ocorrenciasDoPeriodo(intervalo.de, intervalo.ate)
+    : [];
+  const resumoPeriodo = resumoDeOcorrencias(ocorrenciasPeriodo);
+  const totalErros = resumoPeriodo.reduce((soma, v) => soma + (v.total_erros ?? 0), 0);
+  const totalMultas = resumoPeriodo.reduce((soma, v) => soma + (v.valor_penalidade ?? 0), 0);
+  const vendedoresLista = [...new Set(ocorrenciasPeriodo.map((o) => o.vendedor))].sort((a, b) =>
+    a.localeCompare(b, "pt-BR"),
+  );
+  const filtroAtivo = filtro !== "todos" && !vendedoresLista.includes(filtro) ? "todos" : filtro;
+  const ocorrenciasFiltradas =
+    filtroAtivo === "todos"
+      ? ocorrenciasPeriodo
+      : ocorrenciasPeriodo.filter((o) => o.vendedor === filtroAtivo);
 
   const montarPDF = async (
     resumoDados: PenalidadeVendedor[],
@@ -454,13 +499,15 @@ const Penalidades = () => {
 
   const abrirDialogPDF = () => {
     setModoDialog("pdf");
-    setarMesAnterior();
+    setPeriodoDe(intervalo.de);
+    setPeriodoAte(intervalo.ate);
     setDialogAberto(true);
   };
 
   const abrirDialogEmail = () => {
     setModoDialog("email");
-    setarMesAnterior();
+    setPeriodoDe(intervalo.de);
+    setPeriodoAte(intervalo.ate);
     setDialogAberto(true);
   };
 
@@ -600,6 +647,63 @@ const Penalidades = () => {
         )}
       </div>
 
+      {!loading && !erro && (resumo.length > 0 || ocorrencias.length > 0) && (
+        <Card>
+          <CardContent className="flex flex-col gap-3 p-4 sm:flex-row sm:flex-wrap sm:items-end">
+            <div className="space-y-1.5 sm:w-56">
+              <Label htmlFor="filtroPeriodo" className="flex items-center gap-1.5">
+                <CalendarDays className="h-4 w-4 text-muted-foreground" />
+                Período
+              </Label>
+              <Select
+                value={preset}
+                onValueChange={(v) => trocarPreset(v as PeriodoPreset)}
+              >
+                <SelectTrigger id="filtroPeriodo">
+                  <SelectValue placeholder="Selecione o período" />
+                </SelectTrigger>
+                <SelectContent>
+                  {PERIODO_OPCOES.map((opcao) => (
+                    <SelectItem key={opcao.value} value={opcao.value}>
+                      {opcao.label}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
+
+            {preset === "personalizado" && (
+              <>
+                <div className="space-y-1.5 sm:w-44">
+                  <Label htmlFor="filtroDe">De</Label>
+                  <Input
+                    id="filtroDe"
+                    type="date"
+                    value={customDe}
+                    onChange={(e) => setCustomDe(e.target.value)}
+                  />
+                </div>
+                <div className="space-y-1.5 sm:w-44">
+                  <Label htmlFor="filtroAte">Até</Label>
+                  <Input
+                    id="filtroAte"
+                    type="date"
+                    value={customAte}
+                    onChange={(e) => setCustomAte(e.target.value)}
+                  />
+                </div>
+              </>
+            )}
+
+            <p className="text-sm text-muted-foreground sm:ml-auto sm:pb-2">
+              {intervaloValido
+                ? formatPeriodo(intervalo.de, intervalo.ate)
+                : "Informe um período válido (a data inicial não pode ser depois da final)."}
+            </p>
+          </CardContent>
+        </Card>
+      )}
+
       {loading && <p className="py-10 text-center text-muted-foreground">Carregando dados...</p>}
 
       {!loading && erro && (
@@ -638,7 +742,7 @@ const Penalidades = () => {
                 <Users className="h-4 w-4 text-muted-foreground" />
               </CardHeader>
               <CardContent>
-                <p className="text-3xl font-bold">{resumo.length}</p>
+                <p className="text-3xl font-bold">{resumoPeriodo.length}</p>
               </CardContent>
             </Card>
             <Card>
@@ -684,7 +788,7 @@ const Penalidades = () => {
                   </TableRow>
                 </TableHeader>
                 <TableBody>
-                  {resumo.map((v) => (
+                  {resumoPeriodo.map((v) => (
                     <TableRow key={v.vendedor}>
                       <TableCell className="font-medium">{v.vendedor}</TableCell>
                       <TableCell className="text-right">{v.erros_taxa_30 ?? 0}</TableCell>
@@ -695,6 +799,13 @@ const Penalidades = () => {
                       </TableCell>
                     </TableRow>
                   ))}
+                  {resumoPeriodo.length === 0 && (
+                    <TableRow>
+                      <TableCell colSpan={5} className="text-center text-muted-foreground">
+                        Nenhuma penalidade no período selecionado.
+                      </TableCell>
+                    </TableRow>
+                  )}
                 </TableBody>
               </Table>
               </div>
@@ -704,7 +815,7 @@ const Penalidades = () => {
           <Card>
             <CardHeader className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
               <CardTitle>Ocorrências</CardTitle>
-              <Select value={filtro} onValueChange={setFiltro}>
+              <Select value={filtroAtivo} onValueChange={setFiltro}>
                 <SelectTrigger className="w-full sm:w-64">
                   <SelectValue placeholder="Filtrar por vendedor" />
                 </SelectTrigger>
@@ -819,25 +930,22 @@ const Penalidades = () => {
           </div>
 
           <div className="flex flex-wrap items-center gap-2">
-            <Button
-              type="button"
-              variant="outline"
-              size="sm"
-              onClick={setarMesAnterior}
-              className="gap-2"
-            >
-              <CalendarDays className="h-4 w-4" />
-              Mês anterior
-            </Button>
-            <Button
-              type="button"
-              variant="outline"
-              size="sm"
-              onClick={setarMesAtual}
-              className="gap-2"
-            >
-              Este mês
-            </Button>
+            <CalendarDays className="h-4 w-4 text-muted-foreground" />
+            {PERIODO_OPCOES.filter((o) => o.value !== "personalizado").map((opcao) => (
+              <Button
+                key={opcao.value}
+                type="button"
+                variant="outline"
+                size="sm"
+                onClick={() => {
+                  const { de, ate } = intervaloDoPreset(opcao.value);
+                  setPeriodoDe(de);
+                  setPeriodoAte(ate);
+                }}
+              >
+                {opcao.label}
+              </Button>
+            ))}
           </div>
 
           <DialogFooter>
