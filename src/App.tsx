@@ -40,7 +40,14 @@ const App = () => (
               }
             />
             <Route path="/vendedores" element={<Navigate to="/penalidades" replace />} />
-            <Route path="/configuracoes" element={<Configuracoes />} />
+            <Route
+              path="/configuracoes"
+              element={
+                <SenhaGate descricao="Informe a senha de acesso para abrir as configurações.">
+                  <Configuracoes />
+                </SenhaGate>
+              }
+            />
           </Route>
           {/* ADD ALL CUSTOM ROUTES ABOVE THE CATCH-ALL "*" ROUTE */}
           <Route path="*" element={<NotFound />} />
