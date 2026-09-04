@@ -9,18 +9,6 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 const SENHA_PADRAO = "6163";
 const SENHA = import.meta.env.VITE_PENALIDADES_SENHA || SENHA_PADRAO;
 
-// Guarda o desbloqueio apenas na sessão do navegador: ao fechar a aba,
-// a senha é exigida novamente.
-const STORAGE_KEY = "penalidades:liberado";
-
-const lerLiberado = () => {
-  try {
-    return sessionStorage.getItem(STORAGE_KEY) === "1";
-  } catch {
-    return false;
-  }
-};
-
 interface SenhaGateProps {
   titulo?: string;
   descricao?: string;
@@ -32,7 +20,9 @@ const SenhaGate = ({
   descricao = "Informe a senha de acesso para visualizar as penalidades.",
   children,
 }: SenhaGateProps) => {
-  const [liberado, setLiberado] = useState(lerLiberado);
+  // O desbloqueio não é guardado: o componente é desmontado ao sair da aba,
+  // então a senha é exigida a cada entrada (e a cada recarregamento da página).
+  const [liberado, setLiberado] = useState(false);
   const [senha, setSenha] = useState("");
   const [erro, setErro] = useState("");
 
@@ -44,11 +34,6 @@ const SenhaGate = ({
       setErro("Senha incorreta. Tente novamente.");
       setSenha("");
       return;
-    }
-    try {
-      sessionStorage.setItem(STORAGE_KEY, "1");
-    } catch {
-      // sessionStorage indisponível: libera só nesta navegação.
     }
     setErro("");
     setLiberado(true);
